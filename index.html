@@ -198,10 +198,10 @@ class World{
   }
   loadAround(cx,cz){const R=CFG.RR;for(let dx=-R;dx<=R;dx++)for(let dz=-R;dz<=R;dz++){if(dx*dx+dz*dz>(R+1)*(R+1))continue;this.ensure(cx+dx,cz+dz)}}
   unload(cx,cz){const M=CFG.UR;for(const[k,ch] of this.chunks)if(Math.abs(ch.cx-cx)>M||Math.abs(ch.cz-cz)>M){if(ch.mesh)this.scene.remove(ch.mesh);this.chunks.delete(k)}}
-  getB(wx,wy,wz){const ch=this.gc(Math.floor(wx/CS),Math.floor(wz/CS));if(!ch||!ch.ok)return 0;return ch.get(((Math.floor(wx)%CS)+CS)%CS,Math.floor(wy),((Math.floor(wz)%CS)+CS)%CS)}
+  getB(wx,wy,wz){const ch=this.gc(Math.floor(wx/CS),Math.floor(wz/CS));if(!ch)return 0;return ch.get(((Math.floor(wx)%CS)+CS)%CS,Math.floor(wy),((Math.floor(wz)%CS)+CS)%CS)}
   setB(wx,wy,wz,v){const cx=Math.floor(wx/CS),cz=Math.floor(wz/CS);const ch=this.ensure(cx,cz);const lx=((Math.floor(wx)%CS)+CS)%CS,lz=((Math.floor(wz)%CS)+CS)%CS;ch.set(lx,Math.floor(wy),lz,v);ch.dirty=true;this.bq.unshift(ch);[[cx-1,cz],[cx+1,cz],[cx,cz-1],[cx,cz+1]].forEach(([nx,nz])=>{const nc=this.gc(nx,nz);if(nc&&nc.ok){nc.dirty=true;this.bq.unshift(nc)}})}
   ray(ori,dir,mx=6){const s=.04;let pr=null;for(let d=0;d<mx;d+=s){const x=Math.floor(ori.x+dir.x*d),y=Math.floor(ori.y+dir.y*d),z=Math.floor(ori.z+dir.z*d);const bl=this.getB(x,y,z);if(bl&&bl!==B.WATER)return{hit:true,x,y,z,prev:pr,block:bl};pr={x,y,z}}return{hit:false}}
-  surf(wx,wz){for(let y=WH-1;y>=0;y--)if(this.getB(wx,y,wz))return y+1;return SEA+1}
+  surf(wx,wz){const cx2=Math.floor(wx/CS),cz2=Math.floor(wz/CS);const ch2=this.gc(cx2,cz2);if(!ch2)return SEA+2;const lx2=((Math.floor(wx)%CS)+CS)%CS,lz2=((Math.floor(wz)%CS)+CS)%CS;for(let y=WH-1;y>=0;y--)if(ch2.data[ch2.idx(lx2,y,lz2)])return y+1;return SEA+2}
 }
 
 // PLAYER
@@ -300,12 +300,21 @@ const G={ren:null,sc:null,cam:null,world:null,pl:null,mp:null,lk:false,ps:false,
     if(CFG.SHD){this.sl.castShadow=true;this.sl.shadow.mapSize.set(1024,1024);this.sl.shadow.camera.near=.5;this.sl.shadow.camera.far=200;this.sl.shadow.camera.left=this.sl.shadow.camera.bottom=-80;this.sl.shadow.camera.right=this.sl.shadow.camera.top=80}
     this.sc.add(this.sl);this.ml=new THREE.DirectionalLight(0x8899ff,.12);this.sc.add(this.ml);
     SL(30,'Ciel...');this.sky=buildSky(this.sc);
-    this.cam=new THREE.PerspectiveCamera(75,window.innerWidth/window.innerHeight,.1,300);this.sc.add(this.cam);
+    this.cam=new THREE.PerspectiveCamera(75,window.innerWidth/window.innerHeight,.1,300);this.sc.add(this.cam);this.ren.setClearColor(new THREE.Color(.38,.6,.95));
     SL(50,'Monde...');
     this.world=new World(this.sc);this.pl=new Player(this.cam,this.world);
     // Spawn synchrone: 9 chunks centraux
-    for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++){const ch=this.world.ensure(dx,dz);this.world.gen(ch);ch.ok=true;this.world.build(ch)}
-    const sy=this.world.surf(8,8);this.pl.pos.set(8,sy+2,8);
+    // Genere les chunks spawn en synchrone (5x5 pour garantir le terrain visible)
+for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++){
+  const ch=this.world.ensure(dx,dz);
+  if(!ch.ok){this.world.gen(ch);ch.ok=true;}
+}
+// Build mesh (apres que tous les voisins existent)
+for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++){
+  const ch=this.world.gc(this.world.key(dx,dz));
+  if(ch&&ch.ok)this.world.build(ch);
+}
+    const sy=this.world.surf(8,8);this.pl.pos.set(8,Math.max(sy+3,SEA+4),8);
     SL(75,'Interface...');
     if(!solo&&ws){this.mp=new MP(ws,user,this.world,this.sc);this.mp.connect()}else UI.ntf('Mode Solo !','ok');
     UI.buildHB(this.pl.hb);UI.upHB(0);UI.updateHP(20);UI.buildInv();Mob.init(this.pl);
