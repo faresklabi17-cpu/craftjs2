@@ -201,7 +201,7 @@ class World{
   getB(wx,wy,wz){const ch=this.gc(Math.floor(wx/CS),Math.floor(wz/CS));if(!ch)return 0;return ch.get(((Math.floor(wx)%CS)+CS)%CS,Math.floor(wy),((Math.floor(wz)%CS)+CS)%CS)}
   setB(wx,wy,wz,v){const cx=Math.floor(wx/CS),cz=Math.floor(wz/CS);const ch=this.ensure(cx,cz);const lx=((Math.floor(wx)%CS)+CS)%CS,lz=((Math.floor(wz)%CS)+CS)%CS;ch.set(lx,Math.floor(wy),lz,v);ch.dirty=true;this.bq.unshift(ch);[[cx-1,cz],[cx+1,cz],[cx,cz-1],[cx,cz+1]].forEach(([nx,nz])=>{const nc=this.gc(nx,nz);if(nc&&nc.ok){nc.dirty=true;this.bq.unshift(nc)}})}
   ray(ori,dir,mx=6){const s=.04;let pr=null;for(let d=0;d<mx;d+=s){const x=Math.floor(ori.x+dir.x*d),y=Math.floor(ori.y+dir.y*d),z=Math.floor(ori.z+dir.z*d);const bl=this.getB(x,y,z);if(bl&&bl!==B.WATER)return{hit:true,x,y,z,prev:pr,block:bl};pr={x,y,z}}return{hit:false}}
-  surf(wx,wz){const cx2=Math.floor(wx/CS),cz2=Math.floor(wz/CS);const ch2=this.gc(cx2,cz2);if(!ch2)return SEA+2;const lx2=((Math.floor(wx)%CS)+CS)%CS,lz2=((Math.floor(wz)%CS)+CS)%CS;for(let y=WH-1;y>=0;y--)if(ch2.data[ch2.idx(lx2,y,lz2)])return y+1;return SEA+2}
+  surf(wx,wz){const cx2=wx/CS|0,cz2=wz/CS|0;const ch2=this.gc(cx2,cz2);if(!ch2||!ch2.ok)return SEA+4;const lx2=((wx|0)%CS+CS)%CS,lz2=((wz|0)%CS+CS)%CS;for(let y=WH-1;y>=0;y--){if(ch2.data[y*CS*CS+lz2*CS+lx2])return y+2;}return SEA+4;}
 }
 
 // PLAYER
@@ -304,17 +304,11 @@ const G={ren:null,sc:null,cam:null,world:null,pl:null,mp:null,lk:false,ps:false,
     SL(50,'Monde...');
     this.world=new World(this.sc);this.pl=new Player(this.cam,this.world);
     // Spawn synchrone: 9 chunks centraux
-    // Genere les chunks spawn en synchrone (5x5 pour garantir le terrain visible)
-for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++){
-  const ch=this.world.ensure(dx,dz);
-  if(!ch.ok){this.world.gen(ch);ch.ok=true;}
-}
-// Build mesh (apres que tous les voisins existent)
-for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++){
-  const ch=this.world.gc(this.world.key(dx,dz));
-  if(ch&&ch.ok)this.world.build(ch);
-}
-    const sy=this.world.surf(8,8);this.pl.pos.set(8,Math.max(sy+3,SEA+4),8);
+    // Genere les chunks spawn en synchrone (5x5)
+for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++){const ch=this.world.ensure(dx,dz);if(!ch.ok){this.world.gen(ch);ch.ok=true;}}
+// Build mesh apres que tous les voisins existent
+for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++){const ch=this.world.gc(dx,dz);if(ch&&ch.ok)this.world.build(ch);}
+    const sy=this.world.surf(8,8);console.log('Surface Y:',sy);this.pl.pos.set(8,sy+1,8);
     SL(75,'Interface...');
     if(!solo&&ws){this.mp=new MP(ws,user,this.world,this.sc);this.mp.connect()}else UI.ntf('Mode Solo !','ok');
     UI.buildHB(this.pl.hb);UI.upHB(0);UI.updateHP(20);UI.buildInv();Mob.init(this.pl);
